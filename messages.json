@@ -1,8 +1,8 @@
 [
     {
-        "type": "group",
+        "type": "private",
         "sender": "alice",
-        "recipient": "908965a2-316e-4111-bf84-9cb8715e5927",
-        "message": "WcusM85wGMph8xKbpk3joPSkU/cADfaQfjk3jCAj07Mz1DrhpGvpren3RSfgyzWaviPWrx6F"
+        "recipient": "bob",
+        "message": "rPHABlr8i9Up4qA5PpxGkPSRXN2x8RF37xzE7R1mIfeVqdPQGj/RnN386bQ0b4K2Exq9wf7lwtd+N1ws/gz1BxhI1j4R1/CwhkYcsVfJo5VHl/LF2s1xRcTfoK3DCnXKGSjlI0gp4Ib6776C+2BiKe4LXNVdDXeQnVwm59ywLHb6h5sdbqtZBlLecFmEDP1iinHyw0J6kKD3i+RP7cpw8ZyRaIN1TXyF7/3dJ7hvz68sWPJ+12iFBlxTJ7QzfJj3QDtgJ3aLKgkWnGyorADoRAYNeGB2KSwer1SHYbYRV8nGf+rZ6RRAn5yDVriTk+dyajMCctwI7Q8zVOHrJet43w=="
     }
 ]

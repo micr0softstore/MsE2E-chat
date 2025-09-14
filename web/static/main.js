@@ -208,8 +208,9 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log(`[${currentUser}] Received private message from ${data.sender}:`, data);
             if (activeChatTarget && activeChatTarget.type === 'private' && activeChatTarget.id === data.sender) {
                 try {
-                    const decryptedMessage = await decryptMessage(userPrivateKey, base64ToArrayBuffer(data.message));
-                    displayMessage(`${data.sender}: ${new TextDecoder().decode(decryptedMessage)}`, 'received');
+                    const decryptedBuffer = await decryptMessage(userPrivateKey, base64ToArrayBuffer(data.message));
+                    const decryptedText = new TextDecoder().decode(decryptedBuffer);
+                    displayMessage(decryptedText, 'received');
                 } catch (e) {
                     console.error("Decryption failed:", e);
                     displayMessage("[Decryption Error]", 'system-message');
@@ -428,14 +429,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     } else { // 'received'
                         if (isPrivateMatch) {
-                            decryptedText = await decryptMessage(userPrivateKey, base64ToArrayBuffer(msg.message));
+                            const decryptedBuffer = await decryptMessage(userPrivateKey, base64ToArrayBuffer(msg.message));
+                            decryptedText = new TextDecoder().decode(decryptedBuffer);
                         } else { // Group message
                             const key = groupSymmetricKeys[target.id];
                             if (!key) { throw new Error("No key found for this group."); }
                             decryptedText = await decryptSymmetric(key, base64ToArrayBuffer(msg.message));
                         }
                     }
-                    displayMessage(`${msg.sender}: ${decryptedText}`, messageType);
+                    displayMessage(decryptedText, messageType);
                 } catch (e) {
                     console.error("Could not decrypt message from history:", e);
                     displayMessage(`[Message from ${msg.sender} could not be decrypted]`, 'system-message');
@@ -485,7 +487,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
 
-            displayMessage(`${currentUser}: ${messageText}`, 'sent');
+            displayMessage(messageText, 'sent');
             messageInput.value = '';
 
         } catch (error) {
