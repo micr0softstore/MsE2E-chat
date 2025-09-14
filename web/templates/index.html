@@ -31,9 +31,18 @@
         <!-- Main Chat Section (hidden by default) -->
         <div id="chat-container" style="display: none;">
             <div id="sidebar">
-                <h3>Users</h3>
-                <ul id="user-list">
+                <div id="sidebar-header">
+                    <h3>Direct Messages</h3>
+                </div>
+                <ul id="user-list" class="chat-list">
                     <!-- User list will be populated by JS -->
+                </ul>
+                <div id="sidebar-header">
+                    <h3>Group Chats</h3>
+                    <button id="create-group-btn" class="sidebar-btn">+</button>
+                </div>
+                <ul id="group-list" class="chat-list">
+                    <!-- Group list will be populated by JS -->
                 </ul>
                 <div id="user-info">
                     Logged in as: <strong id="current-username"></strong>
@@ -41,6 +50,10 @@
                 </div>
             </div>
             <div id="main-chat">
+                <div id="group-management-area" style="display: none;">
+                    <input type="text" id="add-member-input" placeholder="Username to add">
+                    <button id="add-member-btn">Add Member</button>
+                </div>
                 <div id="chat-window">
                     <div id="messages">
                         <!-- Messages will be populated by JS -->
@@ -52,6 +65,16 @@
                     <button id="send-button" disabled>Send</button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Create Group Modal -->
+    <div id="create-group-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close-button" id="close-modal-btn">&times;</span>
+            <h2>Create New Group</h2>
+            <input type="text" id="group-name-input" placeholder="Enter group name">
+            <button id="submit-create-group-btn">Create</button>
         </div>
     </div>
 

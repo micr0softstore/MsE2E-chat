@@ -4,9 +4,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- State ---
     let socket = null;
     let currentUser = null;
-    let activeChatUser = null;
+    let activeChatTarget = null; // Can be a user {id, type} or group {id, name, type}
     let userPublicKeys = {}; // Cache for public keys
     let userPrivateKey = null;
+    let groupSymmetricKeys = {}; // Cache for decrypted group keys { groupId: CryptoKey }
 
     // --- DOM Elements ---
     const authContainer = document.getElementById('auth-container');
@@ -30,11 +31,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Chat UI
     const userList = document.getElementById('user-list');
+    const groupList = document.getElementById('group-list');
     const currentUsernameSpan = document.getElementById('current-username');
     const logoutButton = document.getElementById('logout-button');
     const messagesDiv = document.getElementById('messages');
     const messageInput = document.getElementById('message-input');
     const sendButton = document.getElementById('send-button');
+
+    // Group Management UI
+    const groupManagementArea = document.getElementById('group-management-area');
+    const addMemberInput = document.getElementById('add-member-input');
+    const addMemberBtn = document.getElementById('add-member-btn');
+
 
     // --- API Functions ---
     async function apiCall(endpoint, method = 'GET', body = null) {
@@ -141,18 +149,48 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    logoutButton.addEventListener('click', () => {
+    const createGroupBtn = document.getElementById('create-group-btn');
+    const createGroupModal = document.getElementById('create-group-modal');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    const submitCreateGroupBtn = document.getElementById('submit-create-group-btn');
+    const groupNameInput = document.getElementById('group-name-input');
+
+    logoutButton.addEventListener('click', async () => {
+        await apiCall('/logout', 'POST');
         if (socket) {
             socket.disconnect();
         }
         currentUser = null;
         userPrivateKey = null;
-        activeChatUser = null;
+        activeChatTarget = null;
         userPublicKeys = {};
+        groupSymmetricKeys = {};
         authContainer.style.display = 'block';
         chatContainer.style.display = 'none';
         userList.innerHTML = '';
+        groupList.innerHTML = '';
         messagesDiv.innerHTML = '';
+        // Also clear the file input
+        loginKeyFileInput.value = '';
+    });
+
+    createGroupBtn.addEventListener('click', () => {
+        createGroupModal.style.display = 'flex';
+    });
+
+    closeModalBtn.addEventListener('click', () => {
+        createGroupModal.style.display = 'none';
+    });
+
+    submitCreateGroupBtn.addEventListener('click', async () => {
+        const groupName = groupNameInput.value;
+        if (groupName) {
+            await createGroup(groupName);
+            groupNameInput.value = '';
+            createGroupModal.style.display = 'none';
+            // Refresh lists
+            await updateUserAndGroupLists();
+        }
     });
 
     // --- Chat Initialization ---
@@ -165,85 +203,242 @@ document.addEventListener('DOMContentLoaded', () => {
             socket.emit('user_logged_in', { username: currentUser });
         });
 
-        // 2. Listen for incoming messages
+        // 2. Listen for incoming private messages
         socket.on('receive_message', async (data) => {
-            console.log(`[${currentUser}] Received message from ${data.sender}:`, data);
-            if (data.sender === activeChatUser) {
+            console.log(`[${currentUser}] Received private message from ${data.sender}:`, data);
+            if (activeChatTarget && activeChatTarget.type === 'private' && activeChatTarget.id === data.sender) {
                 try {
                     const decryptedMessage = await decryptMessage(userPrivateKey, base64ToArrayBuffer(data.message));
-                    displayMessage(decryptedMessage, 'received');
+                    displayMessage(`${data.sender}: ${new TextDecoder().decode(decryptedMessage)}`, 'received');
                 } catch (e) {
                     console.error("Decryption failed:", e);
                     displayMessage("[Decryption Error]", 'system-message');
                 }
             } else {
                 console.log(`[${currentUser}] Received message from inactive chat user ${data.sender}.`);
-                alert(`New message from ${data.sender}!`);
+                alert(`New private message from ${data.sender}!`);
             }
         });
 
-        // 3. Fetch user list
-        await updateUserList();
+        // 3. Listen for incoming group messages
+        socket.on('receive_group_message', async (data) => {
+            console.log(`[${currentUser}] Received group message from ${data.sender} for group ${data.group_id}:`, data);
+            if (activeChatTarget && activeChatTarget.type === 'group' && activeChatTarget.id === data.group_id) {
+                try {
+                    const key = groupSymmetricKeys[data.group_id];
+                    if (!key) throw new Error("Group key not found.");
+                    const decryptedMessage = await decryptSymmetric(key, base64ToArrayBuffer(data.message));
+                    displayMessage(`${data.sender}: ${decryptedMessage}`, 'received');
+                } catch (e) {
+                    console.error("Group message decryption failed:", e);
+                    displayMessage("[Group Decryption Error]", 'system-message');
+                }
+            } else {
+                console.log(`[${currentUser}] Received message for inactive group ${data.group_id}.`);
+                alert(`New message in group!`); // A real UI would show a badge
+            }
+        });
+
+        // 4. Fetch user and group lists
+        await updateUserAndGroupLists();
     }
 
+    // --- Group Logic ---
+    async function createGroup(groupName) {
+        try {
+            // 1. Generate a new symmetric key for the group
+            const symmetricKey = await generateSymmetricKey();
+            const rawKey = await exportSymmetricKeyRaw(symmetricKey);
+
+            // 2. Encrypt the symmetric key with the creator's own public key
+            // We need our own public key. Let's fetch it from the server cache.
+            const selfPublicKeyPem = userPublicKeys[currentUser];
+            const selfPublicKey = await importPublicKey(selfPublicKeyPem);
+            const encryptedKey = await encryptMessage(selfPublicKey, rawKey);
+            const encryptedKeyBase64 = arrayBufferToBase64(encryptedKey);
+
+            // 3. Call the API to create the group
+            const result = await apiCall('/groups', 'POST', {
+                group_name: groupName,
+                creator: currentUser,
+                key: encryptedKeyBase64
+            });
+
+            console.log("Group created:", result.group);
+            alert(`Group "${groupName}" created successfully!`);
+
+            // 4. Store the decrypted symmetric key in our state
+            groupSymmetricKeys[result.group.id] = symmetricKey;
+
+            // TODO: Refresh the group list in the UI
+            // await updateUserAndGroupLists();
+
+        } catch (error) {
+            console.error("Failed to create group:", error);
+            alert("Failed to create group.");
+        }
+    }
+
+    async function addUserToGroup(groupId, usernameToAdd) {
+        try {
+            // 1. Get the symmetric key for the group from our state
+            const symmetricKey = groupSymmetricKeys[groupId];
+            if (!symmetricKey) {
+                alert("Error: You don't have the key for this group.");
+                return;
+            }
+            const rawKey = await exportSymmetricKeyRaw(symmetricKey);
+
+            // 2. Get the public key of the user to add
+            const userToAddPublicKeyPem = userPublicKeys[usernameToAdd];
+            if (!userToAddPublicKeyPem) {
+                alert("Could not find the public key for the user to add.");
+                return;
+            }
+            const userToAddPublicKey = await importPublicKey(userToAddPublicKeyPem);
+
+            // 3. Encrypt the symmetric key with the new user's public key
+            const encryptedKey = await encryptMessage(userToAddPublicKey, rawKey);
+            const encryptedKeyBase64 = arrayBufferToBase64(encryptedKey);
+
+            // 4. Add the user to the group on the server
+            await apiCall(`/groups/${groupId}/members`, 'POST', { username: usernameToAdd });
+
+            // 5. Store the new user's encrypted key on the server
+            await apiCall(`/groups/${groupId}/keys`, 'POST', { username: usernameToAdd, key: encryptedKeyBase64 });
+
+            alert(`User ${usernameToAdd} added to the group successfully!`);
+            // The other user will not get a real-time update, they would need to refresh.
+            // A full implementation would use a WebSocket message to notify the added user.
+        } catch (error) {
+            console.error(`Failed to add user ${usernameToAdd} to group:`, error);
+        }
+    }
+
+
     // --- UI and Chat Logic ---
-    async function updateUserList() {
-        const data = await apiCall('/users');
-        userPublicKeys = data.users;
+    async function updateUserAndGroupLists() {
+        // Fetch and display users
+        const usersData = await apiCall('/users');
+        userPublicKeys = usersData.users;
         userList.innerHTML = '';
         for (const username in userPublicKeys) {
             if (username !== currentUser) {
                 const li = document.createElement('li');
                 li.textContent = username;
-                li.dataset.username = username;
-                li.addEventListener('click', () => selectUser(username));
+                li.dataset.id = username;
+                li.dataset.type = 'private';
+                li.addEventListener('click', () => selectChatTarget({ id: username, type: 'private' }));
                 userList.appendChild(li);
             }
         }
+
+        // Fetch and display groups
+        const groupsData = await apiCall(`/groups`); // No username needed
+        groupList.innerHTML = '';
+        for (const group of groupsData.groups) {
+            const li = document.createElement('li');
+            li.textContent = group.name;
+            li.dataset.id = group.id;
+            li.dataset.type = 'group';
+            li.addEventListener('click', () => selectChatTarget({ id: group.id, name: group.name, type: 'group', keys: group.keys }));
+            groupList.appendChild(li);
+        }
     }
 
-    async function selectUser(username) {
-        activeChatUser = username;
+    addMemberBtn.addEventListener('click', async () => {
+        const usernameToAdd = addMemberInput.value;
+        if (!usernameToAdd) {
+            alert("Please enter a username to add.");
+            return;
+        }
+        if (activeChatTarget && activeChatTarget.type === 'group') {
+            await addUserToGroup(activeChatTarget.id, usernameToAdd);
+            addMemberInput.value = '';
+        } else {
+            alert("You must have a group selected to add a member.");
+        }
+    });
 
-        // Highlight active user in the list
-        document.querySelectorAll('#user-list li').forEach(li => {
-            li.classList.toggle('active', li.dataset.username === username);
+    async function selectChatTarget(target) {
+        activeChatTarget = target; // e.g., { id: 'some_user', type: 'private' } or { id: 'group_id', name: '...', type: 'group' }
+
+        // Highlight active chat in the lists
+        document.querySelectorAll('.chat-list li').forEach(li => {
+            li.classList.toggle('active', li.dataset.id === target.id);
         });
+
+        // Show/hide group management area
+        if (target.type === 'group') {
+            groupManagementArea.style.display = 'flex';
+        } else {
+            groupManagementArea.style.display = 'none';
+        }
 
         // Enable message input
         messageInput.disabled = false;
         sendButton.disabled = false;
-        messageInput.placeholder = `Message ${username}...`;
+        messageInput.placeholder = `Message ${target.name || target.id}...`;
+
+        // If it's a group and we don't have the key, decrypt and store it
+        if (target.type === 'group' && !groupSymmetricKeys[target.id]) {
+            try {
+                const encryptedKeyBase64 = target.keys[currentUser];
+                const encryptedKey = base64ToArrayBuffer(encryptedKeyBase64);
+                const rawKey = await decryptMessage(userPrivateKey, encryptedKey);
+                const symmetricKey = await importSymmetricKeyRaw(rawKey);
+                groupSymmetricKeys[target.id] = symmetricKey;
+                console.log(`Decrypted and stored key for group ${target.name}`);
+            } catch (e) {
+                console.error(`Failed to decrypt key for group ${target.name}:`, e);
+                alert(`Could not decrypt the key for group "${target.name}". You may not have access.`);
+                return;
+            }
+        }
 
         // Fetch and display chat history
-        await loadChatHistory(username);
+        await loadChatHistory(target);
     }
 
-    async function loadChatHistory(otherUser) {
+    async function loadChatHistory(target) {
         messagesDiv.innerHTML = '<p class="system-message">Loading history...</p>';
-        const data = await apiCall(`/history?username=${currentUser}`);
+        const data = await apiCall(`/history`); // No username needed
         const history = data.history;
         messagesDiv.innerHTML = ''; // Clear loading message
 
         for (const msg of history) {
-            if ((msg.sender === currentUser && msg.recipient === otherUser) || (msg.sender === otherUser && msg.recipient === currentUser)) {
+            const isPrivateMatch = (msg.type === 'private' && target.type === 'private' && (msg.sender === currentUser && msg.recipient === target.id) || (msg.sender === target.id && msg.recipient === currentUser));
+            const isGroupMatch = (msg.type === 'group' && target.type === 'group' && msg.recipient === target.id);
+
+            if (isPrivateMatch || isGroupMatch) {
                 let decryptedText;
-                let messageType;
+                let messageType = (msg.sender === currentUser) ? 'sent' : 'received';
 
                 try {
-                    if (msg.sender === currentUser) {
-                        // We can't decrypt our own sent messages from history
-                        // A better client would store sent messages locally
-                        // For now, we will just not display them from history
-                        continue;
-                    } else {
-                        decryptedText = await decryptMessage(userPrivateKey, base64ToArrayBuffer(msg.message));
-                        messageType = 'received';
-                        displayMessage(decryptedText, messageType);
+                    if (messageType === 'sent') {
+                        // For now, we can't decrypt our own messages from history.
+                        // A better client would store sent plaintext locally.
+                        // To make this work for the demo, we'll just skip them.
+                        // Or better, let's try to decrypt group messages we sent.
+                        if (isGroupMatch) {
+                             const key = groupSymmetricKeys[target.id];
+                             decryptedText = await decryptSymmetric(key, base64ToArrayBuffer(msg.message));
+                        } else {
+                            continue; // Skip sent private messages
+                        }
+                    } else { // 'received'
+                        if (isPrivateMatch) {
+                            decryptedText = await decryptMessage(userPrivateKey, base64ToArrayBuffer(msg.message));
+                        } else { // Group message
+                            const key = groupSymmetricKeys[target.id];
+                            if (!key) { throw new Error("No key found for this group."); }
+                            decryptedText = await decryptSymmetric(key, base64ToArrayBuffer(msg.message));
+                        }
                     }
+                    displayMessage(`${msg.sender}: ${decryptedText}`, messageType);
                 } catch (e) {
                     console.error("Could not decrypt message from history:", e);
-                    displayMessage("[This message could not be decrypted]", 'system-message');
+                    displayMessage(`[Message from ${msg.sender} could not be decrypted]`, 'system-message');
                 }
             }
         }
@@ -258,38 +453,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function sendMessage() {
         const messageText = messageInput.value;
-        if (!messageText || !activeChatUser) return;
-
-        console.log(`[${currentUser}] Sending message to ${activeChatUser}: "${messageText}"`);
+        if (!messageText || !activeChatTarget) return;
 
         try {
-            // 1. Get recipient's public key
-            const recipientPublicKeyPem = userPublicKeys[activeChatUser];
-            if (!recipientPublicKeyPem) {
-                console.error("Could not find public key for recipient:", activeChatUser);
-                alert("Could not find recipient's public key.");
-                return;
+            if (activeChatTarget.type === 'private') {
+                console.log(`[${currentUser}] Sending private message to ${activeChatTarget.id}: "${messageText}"`);
+                const recipientPublicKeyPem = userPublicKeys[activeChatTarget.id];
+                const recipientPublicKey = await importPublicKey(recipientPublicKeyPem);
+                const encryptedMessageBuffer = await encryptMessage(recipientPublicKey, new TextEncoder().encode(messageText));
+                const encryptedMessageBase64 = arrayBufferToBase64(encryptedMessageBuffer);
+
+                socket.emit('send_message', {
+                    sender: currentUser,
+                    recipient: activeChatTarget.id,
+                    message: encryptedMessageBase64
+                });
+            } else { // Group message
+                console.log(`[${currentUser}] Sending group message to ${activeChatTarget.name}: "${messageText}"`);
+                const groupKey = groupSymmetricKeys[activeChatTarget.id];
+                if (!groupKey) {
+                    alert("Cannot send message: group key not available.");
+                    return;
+                }
+                const encryptedMessageBuffer = await encryptSymmetric(groupKey, messageText);
+                const encryptedMessageBase64 = arrayBufferToBase64(encryptedMessageBuffer);
+
+                socket.emit('send_group_message', {
+                    sender: currentUser,
+                    recipient: activeChatTarget.id, // recipient is the group_id
+                    message: encryptedMessageBase64
+                });
             }
-            const recipientPublicKey = await importPublicKey(recipientPublicKeyPem);
-            console.log(`[${currentUser}] Successfully imported public key for ${activeChatUser}.`);
 
-            // 2. Encrypt the message
-            const encryptedMessageBuffer = await encryptMessage(recipientPublicKey, messageText);
-            const encryptedMessageBase64 = arrayBufferToBase64(encryptedMessageBuffer);
-            console.log(`[${currentUser}] Message encrypted.`);
-
-            // 3. Send via WebSocket
-            const payload = {
-                sender: currentUser,
-                recipient: activeChatUser,
-                message: encryptedMessageBase64
-            };
-            socket.emit('send_message', payload);
-            console.log(`[${currentUser}] Emitted 'send_message' event with payload:`, payload);
-
-
-            // 4. Display sent message in UI
-            displayMessage(messageText, 'sent');
+            displayMessage(`${currentUser}: ${messageText}`, 'sent');
             messageInput.value = '';
 
         } catch (error) {

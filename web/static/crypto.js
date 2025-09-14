@@ -55,11 +55,70 @@ async function importPrivateKeyJwk(jwk) {
 }
 
 
-// --- Encryption/Decryption Functions ---
+// --- Symmetric (AES) Key Functions ---
 
-async function encryptMessage(publicKey, message) {
+async function generateSymmetricKey() {
+    return window.crypto.subtle.generateKey(
+        { name: 'AES-GCM', length: 256 },
+        true, // extractable
+        ['encrypt', 'decrypt']
+    );
+}
+
+async function exportSymmetricKeyRaw(key) {
+    return window.crypto.subtle.exportKey('raw', key);
+}
+
+async function importSymmetricKeyRaw(keyData) {
+    return window.crypto.subtle.importKey(
+        'raw',
+        keyData,
+        { name: 'AES-GCM' },
+        true,
+        ['encrypt', 'decrypt']
+    );
+}
+
+// --- AES-GCM Symmetric Encryption/Decryption Functions ---
+
+async function encryptSymmetric(key, plaintext) {
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
     const encoder = new TextEncoder();
-    const data = encoder.encode(message);
+    const encodedPlaintext = encoder.encode(plaintext);
+
+    const ciphertext = await window.crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: iv },
+        key,
+        encodedPlaintext
+    );
+
+    // Prepend IV to ciphertext for use in decryption
+    const result = new Uint8Array(iv.length + ciphertext.byteLength);
+    result.set(iv, 0);
+    result.set(new Uint8Array(ciphertext), iv.length);
+
+    return result.buffer;
+}
+
+async function decryptSymmetric(key, combined) {
+    const iv = combined.slice(0, 12);
+    const ciphertext = combined.slice(12);
+
+    const decrypted = await window.crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: iv },
+        key,
+        ciphertext
+    );
+
+    const decoder = new TextDecoder();
+    return decoder.decode(decrypted);
+}
+
+
+// --- RSA Asymmetric Encryption/Decryption Functions ---
+
+async function encryptMessage(publicKey, data) {
+    // This function can now encrypt any ArrayBuffer, not just text messages
     return window.crypto.subtle.encrypt(
         { name: 'RSA-OAEP' },
         publicKey,
@@ -73,8 +132,8 @@ async function decryptMessage(privateKey, ciphertext) {
         privateKey,
         ciphertext
     );
-    const decoder = new TextDecoder();
-    return decoder.decode(decrypted);
+    // The return value is an ArrayBuffer, the caller will decide how to decode it
+    return decrypted;
 }
 
 // --- Helper Functions ---

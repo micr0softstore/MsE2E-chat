@@ -1,0 +1,15 @@
+{
+    "908965a2-316e-4111-bf84-9cb8715e5927": {
+        "id": "908965a2-316e-4111-bf84-9cb8715e5927",
+        "name": "Crypto Crew",
+        "creator": "alice",
+        "members": [
+            "alice",
+            "bob"
+        ],
+        "keys": {
+            "alice": "C+OBuqQvsInTCJWXCjLnDBIEmAhULpOk9EpSBh93uWtlBstBKe6yFQlAncFpUUh+1sZRxUq9/ZwPQqx7teId3zcceM8+jIMja1/L4bMsMedvxrKVuPGZjCo+/MZQmCKNd4EOyShKCZjYSVcyKX44y5v1FqR6X2XR3PTsBzbM6zzsGI3liZZVe5yrB6OBuPLolwUL6YWFwjgqwBWY+ZmMMvOyDBNWfDlzApkffZsxl7yVAM8VlhsASPdQbrahdBf44B6shFm71ZjAxaQMPRHxnTdVodqm9ZZoG9q6kXYAn6Z3dujAvjGZ+htVxgEQ0Vmu3GdW2zl7kIJKymCYhMQkbA==",
+            "bob": "N/W4uJlsWZRnJbmoae/fE4LmM1ddcITELoneqOdKb2CMA+rABx70JC973pQz9gBtj4NhN54XxmvlwFLbxLk3f50a0XtesnBK1SLdJWk3xRCHEKeQCD+n0ZOPLz9GAh40uPGSC8gY4pDfVzuvTSn+IyLzqGD0YxrZFVizAK3WfaBHqKK7dc5VUPU6sdAUsxzpblpsiZJwry9NhRwdwXT1e1M1vXbo14C0gqcBDSW8nqQzej1nt0dK6huneOdyZxS4fWZpm46+HMMx6e1LPjngFNhqki8QLqI+xgugdaTb6wROFLb6cd5tXOdwx4qc0vFTTpT1dQ9x+sVL2NBYTv3KeA=="
+        }
+    }
+}
