@@ -83,38 +83,51 @@ document.addEventListener('DOMContentLoaded', () => {
             // 2. Register user with the server
             await apiCall('/register', 'POST', { username, password, public_key: publicKeyPem });
 
-            // 3. Save private key to IndexedDB
-            await saveKeyToDB(username, keyPair.privateKey);
+            // 3. Export private key and trigger download
+            const privateKeyJwk = await exportPrivateKeyJwk(keyPair.privateKey);
+            const keyFileData = JSON.stringify(privateKeyJwk, null, 2);
+            const blob = new Blob([keyFileData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${username}_private_key.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
 
-            alert('Registration successful! Please log in.');
+            alert('Registration successful! Your private key has been downloaded. Keep it safe and use it to log in.');
             showLoginLink.click();
         } catch (error) {
             console.error('Registration failed:', error);
         }
     });
 
+    const loginKeyFileInput = document.getElementById('login-key-file');
+
     loginButton.addEventListener('click', async () => {
         const username = loginUsernameInput.value;
         const password = loginPasswordInput.value;
-        if (!username || !password) {
-            alert('Username and password are required.');
+        const keyFile = loginKeyFileInput.files[0];
+
+        if (!username || !password || !keyFile) {
+            alert('Username, password, and key file are required.');
             return;
         }
 
         try {
-            // 1. Verify credentials with the server
+            // 1. Read and import the private key from the file
+            const keyFileContent = await keyFile.text();
+            const privateKeyJwk = JSON.parse(keyFileContent);
+            const privateKey = await importPrivateKeyJwk(privateKeyJwk);
+
+            // 2. Verify credentials with the server
             await apiCall('/login', 'POST', { username, password });
 
-            // 2. Get private key from IndexedDB
-            const privateKey = await getKeyFromDB(username);
-            if (!privateKey) {
-                alert('Could not find your private key. Please try registering again.');
-                return;
-            }
+            // 3. Set state and transition to chat view
             userPrivateKey = privateKey;
             currentUser = username;
 
-            // 3. Transition to chat view
             authContainer.style.display = 'none';
             chatContainer.style.display = 'flex';
             currentUsernameSpan.textContent = currentUser;
@@ -124,6 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error('Login failed:', error);
+            alert('Login failed. Please check your credentials and key file.');
         }
     });
 

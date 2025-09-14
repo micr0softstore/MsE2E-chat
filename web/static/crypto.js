@@ -1,44 +1,5 @@
 // crypto.js
 
-const dbName = 'E2EEChatDB';
-const keyStoreName = 'userKeys';
-
-// --- IndexedDB Functions ---
-
-function openDB() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(dbName, 1);
-        request.onerror = () => reject("Error opening IndexedDB.");
-        request.onsuccess = () => resolve(request.result);
-        request.onupgradeneeded = event => {
-            const db = event.target.result;
-            db.createObjectStore(keyStoreName, { keyPath: 'username' });
-        };
-    });
-}
-
-async function saveKeyToDB(username, key) {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([keyStoreName], 'readwrite');
-        const store = transaction.objectStore(keyStoreName);
-        const request = store.put({ username: username, privateKey: key });
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject("Error saving key to DB.");
-    });
-}
-
-async function getKeyFromDB(username) {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([keyStoreName], 'readonly');
-        const store = transaction.objectStore(keyStoreName);
-        const request = store.get(username);
-        request.onsuccess = () => resolve(request.result ? request.result.privateKey : null);
-        request.onerror = () => reject("Error fetching key from DB.");
-    });
-}
-
 // --- Web Crypto API Functions ---
 
 async function generateKeys() {
@@ -54,6 +15,8 @@ async function generateKeys() {
     );
     return keyPair;
 }
+
+// --- Public Key Functions ---
 
 async function exportPublicKey(key) {
     const exported = await window.crypto.subtle.exportKey('spki', key);
@@ -75,6 +38,25 @@ async function importPublicKey(pem) {
     );
 }
 
+// --- Private Key Functions (for manual handling) ---
+
+async function exportPrivateKeyJwk(key) {
+    return window.crypto.subtle.exportKey('jwk', key);
+}
+
+async function importPrivateKeyJwk(jwk) {
+    return window.crypto.subtle.importKey(
+        'jwk',
+        jwk,
+        { name: 'RSA-OAEP', hash: 'SHA-256' },
+        true,
+        ['decrypt']
+    );
+}
+
+
+// --- Encryption/Decryption Functions ---
+
 async function encryptMessage(publicKey, message) {
     const encoder = new TextEncoder();
     const data = encoder.encode(message);
@@ -94,6 +76,8 @@ async function decryptMessage(privateKey, ciphertext) {
     const decoder = new TextDecoder();
     return decoder.decode(decrypted);
 }
+
+// --- Helper Functions ---
 
 // Helper to convert ArrayBuffer to Base64 for storing in JSON
 function arrayBufferToBase64(buffer) {
