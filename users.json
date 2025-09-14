@@ -1,1 +1,10 @@
-{}
+{
+    "alice": {
+        "password_hash": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+        "public_key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1Kym7kLFuY4RntQdWkbyoxpyIBRTAZlKP4vOBobppnnyZvfxJuqtmOdJyv6qgaOFi65CxuOHZa93qbLQeZOt8Z2EXCwHdyIH/+aJsVUVf7kdxUb6DqL8e7W41js2h6utR4w9moC5FQGRAVzgK6ImfmTrx8gakgSDHNALBeTs1LXLnk6srVQXrpcfTXVOBGS/DeO4k1rk04Gf378t2yxhb/YBq2N1s4otMESbSqXOVSkYVT9blovzElCAMDgtOdABFc1Vk6t/+LcLxbEA5ND9iPUJganxMFOByWYq1ynmAneXkgwiXS9lKONxmXUFcsY6phYA9cgZxeZgnMkuChZz2wIDAQAB"
+    },
+    "bob": {
+        "password_hash": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+        "public_key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAldbA6q0+PPAve0IbZAl0ilo/9SI5BatwttXqgof7KRrTzJIBeYdJer5N1Y1aLZB7dlduvuxkh193yOKWvTJQn9BWAMKm70q3xmA5liixkobY9q+VecVJSE+KWKGWubDGDLFIA07R0LHSPWFUQhyBvF7l0P0yawkC7Q5+qSXPY/32qSDsU2pd6aqzawyY+j988FmAKhURnk65F4323crt1aIapuNG+Y3qIUouVYgoOOK+pUAWAmwr3nkt1N/wdwOko7GeU3wjz8NcQrwl5Fy9rZMpxjVGJKJ+Bk2czXQ4fWu9UA+ksmLM3iB/LAwriBX1eHCSlGVHnYtEg6blyMpt5wIDAQAB"
+    }
+}
